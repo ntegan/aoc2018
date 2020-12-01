@@ -42,26 +42,35 @@ mod fabric {
         claims: Vec<Claim>,
     }
     impl FabricMap {
-        pub fn count_square_inches_in_at_least_n_claims(&self, n: u64) -> u64 {
+        pub fn get_only_intact_claim(&self) -> &Claim {
+            let mut remaining_claims = Vec::new();
+            for i in 0..(&self.claims).len() {
+                remaining_claims.push(&self.claims[i]);
+            }
+
             let width = self.max_horizontal_extent();
             let height = self.max_vertical_extent();
-            let mut total_square_inches = 0;
             // horizontal and vertical
             for ho in 0..width + 1 {
                 for ve in 0..height + 1 {
-                    let mut num_claims_containing = 0;
-                    for claim in &self.claims {
+                    let mut claims_containing = Vec::new();
+                    for i in 0..(&self.claims).len() {
+                        let claim = &self.claims[i];
                         if claim.contains_point(Point(ho, ve)) {
-                            num_claims_containing = num_claims_containing + 1;
+                            claims_containing.push(&self.claims[i]);
                         }
-                        if num_claims_containing >= n {
-                            total_square_inches = total_square_inches + 1;
-                            break;
-                        }
+                    }
+                    if claims_containing.len() > 1 {
+                        remaining_claims = remaining_claims
+                            .iter()
+                            .filter(|f| !claims_containing.contains(f))
+                            .map(|f| *f)
+                            .collect();
                     }
                 }
             }
-            total_square_inches
+            assert!(remaining_claims.len() == 1);
+            remaining_claims[0]
         }
         pub fn from_claim_list(claim_list: Vec<Claim>) -> FabricMap {
             FabricMap { claims: claim_list }
@@ -88,7 +97,7 @@ mod fabric {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub struct Claim {
         id: u64,
         inches_from_left: u64,
@@ -201,11 +210,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let map = fabric::FabricMap::from_claim_list(claim_list);
 
-    println!("map max horizontal extent {}", map.max_horizontal_extent());
-    println!("map max vertical extent {}", map.max_vertical_extent());
+    let result = map.get_only_intact_claim();
 
-    let result = map.count_square_inches_in_at_least_n_claims(2);
-    println!("Answer: {}", result);
+    println!("{:?}", result);
 
     Ok(())
 }
