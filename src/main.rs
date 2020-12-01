@@ -61,12 +61,198 @@ mod myerror;
 // What is the ID of the guard you chose multiplied by the minute you chose?
 // e.g. above would be 10 * 24 = 240
 
+mod repose_record {
+    use regex::Regex;
+    const TIMESTAMP_REGEX: &'static str = "^\\[([0-9]*)-([0-9]*)-([0-9]*) ([0-9]*):([0-9]*)\\].*$";
+    const EVENT_REGEX: &'static str = "^\\[.*\\] (.*)$";
+    const GUARD_NUMBER_REGEX: &'static str = "^Guard #([0-9]*) begins shift$";
+
+    #[derive(Debug)]
+    struct GuardNumber(u64);
+
+    #[derive(Debug)]
+    enum Event {
+        BeginShift(GuardNumber),
+        FallAsleep,
+        WakeUp,
+    }
+    impl Event {
+        pub fn from_observation_string(
+            observation_string: &str,
+        ) -> Result<Event, Box<dyn std::error::Error>> {
+            let re = Regex::new(EVENT_REGEX)?;
+            let caps = re
+                .captures(observation_string)
+                .ok_or("No regex capture matches!")?;
+            let event_string = caps.get(1).ok_or("Couldn't get event string")?.as_str();
+
+            if event_string == "wakes up" {
+                return Ok(Event::WakeUp);
+            } else if event_string == "falls asleep" {
+                return Ok(Event::FallAsleep);
+            } else {
+                let re = Regex::new(GUARD_NUMBER_REGEX)?;
+                let caps = re
+                    .captures(event_string)
+                    .ok_or("No regex capture matches!")?;
+                let guard_number = caps
+                    .get(1)
+                    .ok_or("Couldn't get guard number")?
+                    .as_str()
+                    .parse::<u64>()?;
+                return Ok(Event::BeginShift(GuardNumber(guard_number)));
+            }
+        }
+    }
+    #[derive(Debug)]
+    pub struct Timestamp {
+        year: u64,
+        month: u64,
+        day: u64,
+        hour: u64,
+        minute: u64,
+    }
+    impl PartialOrd for Timestamp {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for Timestamp {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            match self.year.cmp(&other.year) {
+                std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+                std::cmp::Ordering::Equal => match self.month.cmp(&other.month) {
+                    std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                    std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+                    std::cmp::Ordering::Equal => match self.day.cmp(&other.day) {
+                        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+                        std::cmp::Ordering::Equal => match self.hour.cmp(&other.hour) {
+                            std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                            std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+                            std::cmp::Ordering::Equal => match self.minute.cmp(&other.minute) {
+                                std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+                                std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+                                std::cmp::Ordering::Equal => std::cmp::Ordering::Equal,
+                            },
+                        },
+                    },
+                },
+            }
+        }
+    }
+    impl PartialEq for Timestamp {
+        fn eq(&self, other: &Self) -> bool {
+            self.year == other.year
+                && self.month == other.month
+                && self.day == other.day
+                && self.hour == other.hour
+                && self.minute == other.minute
+        }
+    }
+    impl Eq for Timestamp {}
+    impl Timestamp {
+        pub fn from_observation_string(
+            observation_string: &str,
+        ) -> Result<Timestamp, Box<dyn std::error::Error>> {
+            let re = Regex::new(TIMESTAMP_REGEX)?;
+            let caps = re
+                .captures(observation_string)
+                .ok_or("No regex capture matches!")?;
+            let year = caps
+                .get(1)
+                .ok_or("Couldn't get year")?
+                .as_str()
+                .parse::<u64>()?;
+            let month = caps
+                .get(2)
+                .ok_or("Couldn't get month")?
+                .as_str()
+                .parse::<u64>()?;
+            let day = caps
+                .get(3)
+                .ok_or("Couldn't get day")?
+                .as_str()
+                .parse::<u64>()?;
+            let hour = caps
+                .get(4)
+                .ok_or("Couldn't get hour")?
+                .as_str()
+                .parse::<u64>()?;
+            let minute = caps
+                .get(5)
+                .ok_or("Couldn't get minute")?
+                .as_str()
+                .parse::<u64>()?;
+            Ok(Timestamp {
+                year,
+                month,
+                day,
+                hour,
+                minute,
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Record {
+        event: Event,
+        pub time: Timestamp,
+    }
+
+    #[derive(Debug)]
+    pub struct Ledger {
+        pub records: Vec<Record>,
+    }
+
+    impl Ledger {
+        pub fn from_observation_string_list(
+            observation_list: Vec<&str>,
+        ) -> Result<Ledger, Box<dyn std::error::Error>> {
+            let mut records = Vec::new();
+            for observation in observation_list {
+                let time = Timestamp::from_observation_string(observation)?;
+                let event = Event::from_observation_string(observation)?;
+                records.push(Record { event, time });
+            }
+            Ok(Ledger { records })
+        }
+
+        pub fn sort(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+            self.records
+                .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+            Ok(())
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //input::example();
 
     let input = input::read_until_eof()?;
 
-    let _entry_string_list: Vec<&str> = input.lines().collect();
+    let observation_list: Vec<&str> = input.lines().collect();
+
+    let mut ledger = repose_record::Ledger::from_observation_string_list(observation_list)?;
+
+    //println!("{:#?}", ledger);
+
+    println!("Before");
+    for i in 1..ledger.records.len() {
+        println!("{}", ledger.records[i - 1].time < ledger.records[i].time);
+    }
+    ledger.sort();
+    println!("after");
+
+    //println!("{:#?}", ledger);
+
+    for i in 1..ledger.records.len() {
+        println!("{}", ledger.records[i - 1].time < ledger.records[i].time);
+    }
+
+    // convert list of records to list of Record structs
+    // sort them
 
     Ok(())
 }
