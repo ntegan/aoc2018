@@ -23,7 +23,7 @@ pub fn read_until_eof() -> Result<String, Box<dyn std::error::Error>> {
     use std::fmt::Write;
     use std::io;
     let mut input = String::new();
-    let mut buf = String::new();
+    let buf = String::new();
 
     loop {
         let bytes_read = io::stdin().read_line(&mut input)?;
@@ -31,7 +31,7 @@ pub fn read_until_eof() -> Result<String, Box<dyn std::error::Error>> {
             break;
         }
         if input.len() != 0 {
-        write!(input, "{}", buf);
+        write!(input, "{}", buf)?;
         }
     }
 

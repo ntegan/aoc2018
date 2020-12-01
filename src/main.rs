@@ -1,46 +1,59 @@
 mod input;
+mod myerror;
 
-// search or two similar box ids.
-// puzzle input is list of likely cndidates (after scannign each box).
-// count the number of boxes that have an ID containing exactly two of any
-// letter, and then separately counting those with eaxactly three of any letter.
-// multiply those two counts togetyher to get a rudimentary checksum
-// and compare it to what device predicts.
+#[derive(Debug)]
+struct StringPair(String, String);
 
-mod myerror {
-    use std::fmt;
-    #[derive(Debug)]
-    pub struct MyError;
-    impl fmt::Display for MyError {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "There is an error")
+fn get_possible_pairs(box_id_list: Vec<&str>) -> Vec<StringPair> {
+    let mut result = Vec::<StringPair>::new();
+    for id in box_id_list.iter() {
+        for id2 in box_id_list.iter() {
+            if *id != *id2 {
+                result.push(StringPair(String::from(*id), String::from(*id2)));
+            }
         }
     }
-    impl std::error::Error for MyError {}
+    result
 }
 
-//                    return Err(Box::new(myerror::MyError));
-fn box_id_contains_letters_repeating_n_times(line: &str, n: u64) -> bool {
-    for car in line.chars() {
-        if line.matches(car).count() == n as usize {
-            return true;
+/// test if a pair of strings differ by exactly n characters
+fn string_pair_differs_by_n_characters(pair: &StringPair, n: u64) -> bool {
+    let mut number_of_different_characters = 0;
+
+    for char_pair in pair.0.chars().zip(pair.1.chars()) {
+        if char_pair.0 != char_pair.1 {
+            number_of_different_characters = number_of_different_characters + 1;
         }
     }
-    false
+
+    number_of_different_characters == n
 }
 
-fn count_box_ids_that_contain_letters_repeating_n_times(
-    id_list: &String,
+fn find_pairs_differing_by_n_characters(
+    box_id_list: Vec<&str>,
     n: u64,
-) -> Result<u64, Box<dyn std::error::Error>> {
-    let mut total: u64 = 0;
-    for line in id_list.lines() {
-        let result = box_id_contains_letters_repeating_n_times(&line, n);
-        if result {
-            total = total + 1;
+) -> Result<StringPair, Box<dyn std::error::Error>> {
+    assert!(n > 0);
+
+    let possible_pairs = get_possible_pairs(box_id_list);
+
+    for pair in possible_pairs {
+        if string_pair_differs_by_n_characters(&pair, n) {
+            return Ok(pair);
         }
     }
-    Ok(total)
+
+    return Err(Box::new(myerror::MyError));
+}
+
+fn remove_differing_chars(pair: StringPair) -> String {
+    let mut result = String::new();
+    for i in pair.0.chars().zip(pair.1.chars()) {
+        if i.0 == i.1 {
+            result.push(i.0);
+        }
+    }
+    result
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -48,10 +61,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let input = input::read_until_eof()?;
 
-    let num_twice = count_box_ids_that_contain_letters_repeating_n_times(&input, 2)?;
-    let num_thrice = count_box_ids_that_contain_letters_repeating_n_times(&input, 3)?;
+    let box_ids: Vec<&str> = input.lines().collect();
 
-    println!("Num twice: {}", num_twice);
-    println!("Num thrice: {}", num_thrice);
+    let result = find_pairs_differing_by_n_characters(box_ids, 1)?;
+
+    let result = remove_differing_chars(result);
+
+    println!("{}", result);
+
     Ok(())
 }
