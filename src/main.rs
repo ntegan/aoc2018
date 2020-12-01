@@ -35,6 +35,59 @@ mod fabric {
     use regex::Regex;
     const FABRIC_STRING_REGEX: &'static str = "^#*([0-9]*) @ ([0-9]*),([0-9]*): ([0-9]*)x([0-9]*)$";
 
+    pub struct Point(u64, u64);
+
+    #[derive(Debug)]
+    pub struct FabricMap {
+        claims: Vec<Claim>,
+    }
+    impl FabricMap {
+        pub fn count_square_inches_in_at_least_n_claims(&self, n: u64) -> u64 {
+            let width = self.max_horizontal_extent();
+            let height = self.max_vertical_extent();
+            let mut total_square_inches = 0;
+            // horizontal and vertical
+            for ho in 0..width + 1 {
+                for ve in 0..height + 1 {
+                    let mut num_claims_containing = 0;
+                    for claim in &self.claims {
+                        if claim.contains_point(Point(ho, ve)) {
+                            num_claims_containing = num_claims_containing + 1;
+                        }
+                        if num_claims_containing >= n {
+                            total_square_inches = total_square_inches + 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            total_square_inches
+        }
+        pub fn from_claim_list(claim_list: Vec<Claim>) -> FabricMap {
+            FabricMap { claims: claim_list }
+        }
+        pub fn max_horizontal_extent(&self) -> u64 {
+            let mut max = 0;
+            for claim in &self.claims {
+                let claim_extent = claim.max_horizontal_extent();
+                if claim_extent > max {
+                    max = claim_extent;
+                }
+            }
+            max
+        }
+        pub fn max_vertical_extent(&self) -> u64 {
+            let mut max = 0;
+            for claim in &self.claims {
+                let claim_extent = claim.max_vertical_extent();
+                if claim_extent > max {
+                    max = claim_extent;
+                }
+            }
+            max
+        }
+    }
+
     #[derive(Debug)]
     pub struct Claim {
         id: u64,
@@ -45,6 +98,39 @@ mod fabric {
     }
 
     impl Claim {
+        pub fn contains_point(&self, point: Point) -> bool {
+            let ho = point.0;
+            let ve = point.1;
+            if ho >= self.inches_from_left && ho < (self.inches_from_left + self.width_inches) {
+                if ve >= self.inches_from_top && ve < (self.inches_from_top + self.height_inches) {
+                    return true;
+                }
+            }
+            false
+        }
+        /// Returns how far the right most pixel of this claim extends.
+        /// e.g.
+        /// #1 @ 1,3: 4x4
+        /// #2 @ 3,1: 4x4
+        /// #3 @ 5,5: 2x2
+        /// ........
+        /// ...2222.
+        /// ...2222.
+        /// .11XX22.
+        /// .11XX22.
+        /// .111133.
+        /// .111133.
+        /// ........
+        ///
+        /// plot 1 max horizontal extent is 4
+        /// plot 2 max horizontal extent is 6
+        ///
+        pub fn max_horizontal_extent(&self) -> u64 {
+            self.inches_from_left + self.width_inches - 1
+        }
+        pub fn max_vertical_extent(&self) -> u64 {
+            self.inches_from_top + self.height_inches - 1
+        }
         pub fn from_string(string: &String) -> Result<Claim, Box<dyn std::error::Error>> {
             let re = Regex::new(FABRIC_STRING_REGEX)?;
 
@@ -78,6 +164,9 @@ mod fabric {
                 .as_str()
                 .parse::<u64>()?;
 
+            assert!(width_inches > 0);
+            assert!(height_inches > 0);
+
             Ok(Claim {
                 id,
                 inches_from_left,
@@ -110,8 +199,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let claim_list = claim_list_from_claim_string_list(claim_string_list)?;
 
-    println!("{:#?}", claim_list);
+    let map = fabric::FabricMap::from_claim_list(claim_list);
 
+    println!("map max horizontal extent {}", map.max_horizontal_extent());
+    println!("map max vertical extent {}", map.max_vertical_extent());
+
+    let result = map.count_square_inches_in_at_least_n_claims(2);
+    println!("Answer: {}", result);
 
     Ok(())
 }
