@@ -18,33 +18,40 @@ impl fmt::Display for MyError {
     }
 }
 impl std::error::Error for MyError {}
-/// Processes a drift sequence (newline separated drifts) where each drift
-/// value is positive or negative, e.g. `+1` or `-2`.
-fn process_frequency_drift_sequence(sequence: String) -> Result<i64, Box<dyn std::error::Error>> {
-    let mut total = 0i64;
+fn find_first_repeated_frequency(sequence: String) -> Result<i64, Box<dyn std::error::Error>> {
+    let mut frequency = 0i64;
+    let mut frequencies = Vec::<i64>::new();
+    frequencies.push(frequency);
 
     const FIRST_CHAR: usize = 0;
     const DRIFT_VALUE_START: usize = 1;
 
-    for line in sequence.lines() {
-        let first_char = line.chars().nth(FIRST_CHAR).ok_or("Empty Line")?;
-        let slice = &line[DRIFT_VALUE_START..];
-        let drift_value: i64 = slice.parse::<i64>()?;
+    loop {
+        for line in sequence.lines() {
+            let first_char = line.chars().nth(FIRST_CHAR).ok_or("Empty Line")?;
+            let slice = &line[DRIFT_VALUE_START..];
+            let drift_value: i64 = slice.parse::<i64>()?;
 
-        match first_char {
-            '+' => {
-                total = total + drift_value;
+            match first_char {
+                '+' => {
+                    frequency = frequency + drift_value;
+                }
+                '-' => {
+                    frequency = frequency - drift_value;
+                }
+                _ => {
+                    return Err(Box::new(MyError));
+                }
             }
-            '-' => {
-                total = total - drift_value;
+
+            if frequencies.contains(&frequency) {
+                return Ok(frequency);
             }
-            _ => {
-                return Err(Box::new(MyError));
-            }
+            frequencies.push(frequency);
         }
     }
-    //return Err(Box::new(MyError));
-    Ok(total)
+    eprintln!("No dice");
+    return Err(Box::new(MyError));
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -52,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let input = input::read_until_eof()?;
 
-    let result = process_frequency_drift_sequence(input)?;
+    let result = find_first_repeated_frequency(input)?;
 
     println!("answer: {}", result);
 
