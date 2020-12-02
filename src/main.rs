@@ -67,11 +67,16 @@ mod repose_record {
     const EVENT_REGEX: &'static str = "^\\[.*\\] (.*)$";
     const GUARD_NUMBER_REGEX: &'static str = "^Guard #([0-9]*) begins shift$";
 
-    #[derive(Debug)]
-    struct GuardNumber(u64);
+    #[derive(Debug, Clone, Copy)]
+    pub struct GuardNumber(u64);
+    impl PartialEq for GuardNumber {
+        fn eq(&self, other: &Self) -> bool {
+            self.0 == other.0
+        }
+    }
 
     #[derive(Debug)]
-    enum Event {
+    pub enum Event {
         BeginShift(GuardNumber),
         FallAsleep,
         WakeUp,
@@ -104,7 +109,7 @@ mod repose_record {
             }
         }
     }
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Copy)]
     pub struct Timestamp {
         year: u64,
         month: u64,
@@ -196,27 +201,92 @@ mod repose_record {
     }
 
     #[derive(Debug)]
+    pub struct Nap {
+        pub start_time: Timestamp,
+        pub end_time: Timestamp,
+    }
+
+    #[derive(Debug)]
     pub struct Record {
-        event: Event,
+        pub event: Event,
         pub time: Timestamp,
     }
 
     #[derive(Debug)]
     pub struct Ledger {
         pub records: Vec<Record>,
+        pub guards: Vec<GuardNumber>,
+        pub guard_naps: Vec<Vec<Nap>>,
     }
 
     impl Ledger {
+        fn fill_guard_naps(
+            guard_naps: &mut Vec<Vec<Nap>>,
+            guards: &Vec<GuardNumber>,
+            records: &Vec<Record>,
+        ) {
+            for guard in guards {
+                let mut naps = Vec::new();
+                let mut is_current_guard = false;
+
+                let mut time1;
+                let mut time2;
+
+                for record in records {
+                    match record.event {
+                        Event::BeginShift(guard_number) => {
+                            if guard_number == *guard {
+                                is_current_guard = true;
+                            } else {
+                                is_current_guard = false;
+                            }
+                        }
+                        Event::FallAsleep => {
+                            time1 = record.time;
+                        }
+                        Event::WakeUp => {
+                            time2 = record.time;
+                            naps.push(Nap {
+                                start_time: time1,
+                                end_time: time2,
+                            });
+                        }
+                    }
+                }
+
+                println!("{:?}", guard);
+                guard_naps.push(naps);
+            }
+            //
+        }
         pub fn from_observation_string_list(
             observation_list: Vec<&str>,
         ) -> Result<Ledger, Box<dyn std::error::Error>> {
             let mut records = Vec::new();
+            let mut guards = Vec::new();
+            let mut guard_naps = Vec::new();
             for observation in observation_list {
                 let time = Timestamp::from_observation_string(observation)?;
                 let event = Event::from_observation_string(observation)?;
                 records.push(Record { event, time });
             }
-            Ok(Ledger { records })
+            for record in &records {
+                match record.event {
+                    Event::BeginShift(guard_number) => {
+                        if !guards.contains(&guard_number) {
+                            guards.push(guard_number);
+                        }
+                    }
+                    Event::FallAsleep => {}
+                    Event::WakeUp => {}
+                }
+            }
+            Self::fill_guard_naps(&mut guard_naps, &guards, &records);
+            Ok(Ledger {
+                records,
+                guards,
+                guard_naps,
+            })
         }
 
         pub fn sort(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -236,23 +306,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut ledger = repose_record::Ledger::from_observation_string_list(observation_list)?;
 
-    //println!("{:#?}", ledger);
+    ledger.sort()?;
 
-    println!("Before");
-    for i in 1..ledger.records.len() {
-        println!("{}", ledger.records[i - 1].time < ledger.records[i].time);
+    /*
+    for i in &ledger.records {
+        println!("{:?}", i);
     }
-    ledger.sort();
-    println!("after");
-
+    */
     //println!("{:#?}", ledger);
-
-    for i in 1..ledger.records.len() {
-        println!("{}", ledger.records[i - 1].time < ledger.records[i].time);
-    }
-
-    // convert list of records to list of Record structs
-    // sort them
 
     Ok(())
 }
