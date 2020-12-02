@@ -68,7 +68,7 @@ mod repose_record {
     const GUARD_NUMBER_REGEX: &'static str = "^Guard #([0-9]*) begins shift$";
 
     #[derive(Debug, Clone, Copy)]
-    pub struct GuardNumber(u64);
+    pub struct GuardNumber(pub u64);
     impl PartialEq for GuardNumber {
         fn eq(&self, other: &Self) -> bool {
             self.0 == other.0
@@ -219,7 +219,62 @@ mod repose_record {
         pub guard_naps: Vec<Vec<Nap>>,
     }
 
+    fn get_guard_total_minutes_asleep(naps: &Vec<Nap>) -> u64 {
+        let mut total = 0;
+        for nap in naps {
+            total = total + nap.end_time.minute - nap.start_time.minute;
+        }
+        total
+    }
+
     impl Ledger {
+        // TODO: this is a straight up paste
+        // learn how this works
+        // https://codereview.stackexchange.com/questions/173338/calculate-mean-median-and-mode-in-rust/173437
+        fn mode(numbers: Vec<u64>) -> Option<u64> {
+            let mut counts = std::collections::HashMap::new();
+
+            numbers.iter().copied().max_by_key(|&n| {
+                let count = counts.entry(n).or_insert(0);
+                *count += 1;
+                *count
+            })
+        }
+
+        /// get the sleepiest minute of the sleepiest guard
+        pub fn get_sleepiest_guards_sleepiest_minute(&self) -> u64 {
+            let guard = self.get_guard_with_most_time_asleep();
+            let mut the_index = 0;
+            for index in 0..self.guards.len() {
+                if guard == self.guards[index] {
+                    the_index = index;
+                }
+            }
+            let naps = &self.guard_naps[the_index];
+            let mut minutes = Vec::new();
+            for nap in naps {
+                for i in nap.start_time.minute..nap.end_time.minute {
+                    minutes.push(i);
+                }
+            }
+            match Self::mode(minutes) {
+                Some(s) => s,
+                None => 0x123456789,
+            }
+        }
+        pub fn get_guard_with_most_time_asleep(&self) -> GuardNumber {
+            let mut max_time_asleep = 0;
+            let mut max_index = 0;
+            for index in 0..self.guards.len() {
+                let time_asleep = get_guard_total_minutes_asleep(&self.guard_naps[index]);
+                if time_asleep > max_time_asleep {
+                    max_index = index;
+                    max_time_asleep = time_asleep;
+                }
+            }
+            assert!(max_time_asleep > 0);
+            self.guards[max_index]
+        }
         fn fill_guard_naps(
             guard_naps: &mut Vec<Vec<Nap>>,
             guards: &Vec<GuardNumber>,
@@ -228,9 +283,6 @@ mod repose_record {
             for guard in guards {
                 let mut naps = Vec::new();
                 let mut is_current_guard = false;
-
-                let mut time1;
-                let mut time2;
 
                 for record_index in 0..records.len() {
                     match records[record_index].event {
@@ -242,24 +294,20 @@ mod repose_record {
                             }
                         }
                         Event::FallAsleep => {
-                            if is_current_guard {
-                            if let Event::WakeUp = records[record_index + 1].event {
-                                time1 = records[record_index].time;
-                                time2 = records[record_index + 1].time;
-                                naps.push(Nap {
-                                    start_time: time1,
-                                    end_time: time2,
-                                });
-                            }
+                            if is_current_guard && record_index + 1 < records.len() {
+                                if let Event::WakeUp = records[record_index + 1].event {
+                                    naps.push(Nap {
+                                        start_time: records[record_index].time,
+                                        end_time: records[record_index + 1].time,
+                                    });
+                                }
                             }
                         }
                         Event::WakeUp => {}
                     }
                 }
-
                 guard_naps.push(naps);
             }
-            //
         }
         pub fn from_observation_string_list(
             observation_list: Vec<&str>,
@@ -315,7 +363,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{:?}", i);
     }
     */
-    println!("{:#?}", ledger.guard_naps);
+
+    let guard = ledger.get_guard_with_most_time_asleep();
+
+    let time = ledger.get_sleepiest_guards_sleepiest_minute();
+    println!(
+        "{:?} was asleep the longest, sleepiest minute was {}",
+        guard, time
+    );
+    println!("answer: {}", guard.0 * time);
 
     Ok(())
 }
