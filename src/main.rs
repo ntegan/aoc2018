@@ -232,8 +232,8 @@ mod repose_record {
                 let mut time1;
                 let mut time2;
 
-                for record in records {
-                    match record.event {
+                for record_index in 0..records.len() {
+                    match records[record_index].event {
                         Event::BeginShift(guard_number) => {
                             if guard_number == *guard {
                                 is_current_guard = true;
@@ -242,19 +242,21 @@ mod repose_record {
                             }
                         }
                         Event::FallAsleep => {
-                            time1 = record.time;
+                            if is_current_guard {
+                            if let Event::WakeUp = records[record_index + 1].event {
+                                time1 = records[record_index].time;
+                                time2 = records[record_index + 1].time;
+                                naps.push(Nap {
+                                    start_time: time1,
+                                    end_time: time2,
+                                });
+                            }
+                            }
                         }
-                        Event::WakeUp => {
-                            time2 = record.time;
-                            naps.push(Nap {
-                                start_time: time1,
-                                end_time: time2,
-                            });
-                        }
+                        Event::WakeUp => {}
                     }
                 }
 
-                println!("{:?}", guard);
                 guard_naps.push(naps);
             }
             //
@@ -313,7 +315,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{:?}", i);
     }
     */
-    //println!("{:#?}", ledger);
+    println!("{:#?}", ledger.guard_naps);
 
     Ok(())
 }
